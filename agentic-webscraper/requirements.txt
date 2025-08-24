@@ -1,0 +1,6 @@
+requests
+python-dotenv
+beautifulsoup4
+ddgs
+langchain-openai
+langchain-core

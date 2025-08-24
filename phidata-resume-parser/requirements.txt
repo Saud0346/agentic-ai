@@ -1,0 +1,7 @@
+pdfplumber
+python-docx
+pandas
+beautifulsoup4
+python-dotenv
+phidata
+streamlit

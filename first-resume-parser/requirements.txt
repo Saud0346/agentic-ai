@@ -1,0 +1,7 @@
+pdfplumber
+python-docx
+pandas
+google-genai
+python-dotenv
+beautifulsoup4
+streamlit

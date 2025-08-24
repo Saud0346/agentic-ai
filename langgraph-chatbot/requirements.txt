@@ -1,0 +1,8 @@
+streamlit
+requests
+python-dotenv
+beautifulsoup4
+ddgs
+langchain-core
+langchain-openai
+langgraph

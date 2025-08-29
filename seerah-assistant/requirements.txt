@@ -1,8 +1,7 @@
+python-dotenv
 langchain
 langchain-community
-langchain-openai
-pypdf
+langchain-google-genai
 faiss-cpu
-python-dotenv
-tiktoken
-sentence-transformers
+pypdf
+pdfplumber

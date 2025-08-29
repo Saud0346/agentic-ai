@@ -1,53 +1,62 @@
 import os
 from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from langchain_openai import ChatOpenAI
+from langchain_community.document_loaders import PDFPlumberLoader
 
-# --- Load API Key (for LLM, not embeddings) ---
+# ------------------------
+# 1. Load API Key
+# ------------------------
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("OPENAI_API_KEY not found in .env file")
+    raise ValueError("GOOGLE_API_KEY not found in .env file")
 
-# --- Load and process PDFs ---
-docs = []
-data_dir = "data"  # put your PDFs inside this folder
-for file in os.listdir(data_dir):
-    if file.endswith(".pdf"):
-        loader = PyPDFLoader(os.path.join(data_dir, file))
-        documents = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        docs.extend(text_splitter.split_documents(documents))
+# ------------------------
+# 2. Load Documents (PDFs)
+# ------------------------
+pdf_path = "data/raheeq.pdf"   # replace with your own file
+loader = PDFPlumberLoader(pdf_path)
+documents = loader.load()
 
-# --- Use HuggingFace embeddings (local, free) ---
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+# ------------------------
+# 3. Split Documents into Chunks
+# ------------------------
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+docs = text_splitter.split_documents(documents)
 
-# --- Create / Load Vector Store ---
-if os.path.exists("vectorstore"):
-    vectorstore = FAISS.load_local("vectorstore", embeddings, allow_dangerous_deserialization=True)
-else:
-    vectorstore = FAISS.from_documents(docs, embeddings)
-    vectorstore.save_local("vectorstore")
+# ------------------------
+# 4. Create Vector DB (FAISS)
+# ------------------------
+embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+vectorstore = FAISS.from_documents(docs, embeddings)
 
-# --- Build Retriever + QA Chain ---
-llm = ChatOpenAI(openai_api_key=api_key, model="gpt-4o-mini")  # you can also use gpt-3.5-turbo
-retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, return_source_documents=True)
+# ------------------------
+# 5. Build Retrieval-QA Chain
+# ------------------------
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",   # fast + cost-efficient model
+    google_api_key=api_key,
+    temperature=0
+)
 
-# --- Simple Q&A Loop ---
-print("\n📚 Seerah RAG Chatbot Ready! Ask your questions (type 'exit' to quit)\n")
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=vectorstore.as_retriever(),
+    chain_type="stuff"   # simplest method
+)
+
+# ------------------------
+# 6. Ask Questions
+# ------------------------
 while True:
-    query = input("You: ")
-    if query.lower() in ["exit", "quit"]:
-        print("👋 Exiting chatbot.")
+    query = input("\nAsk a question (or 'exit'): ")
+    if query.lower() == "exit":
         break
-    result = qa_chain({"query": query})
-    print("\n🤖 Answer:", result["result"])
-    print("\n🔎 Sources:")
-    for doc in result["source_documents"]:
-        print(" -", doc.metadata.get("source", "Unknown"))
-    print("\n" + "-"*60 + "\n")
+    result = qa_chain.run(query)
+    print(f"\nAnswer: {result}")

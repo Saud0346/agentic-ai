@@ -1,62 +1,97 @@
+# seerah.py
+"""
+Simple RAG Assistant using LangChain + OpenAI
+
+Steps:
+1. Create a .env file in the same folder with:
+   OPENAI_API_KEY=your_api_key_here
+
+2. Install dependencies:
+   pip install langchain langchain-openai langchain-community openai faiss-cpu pdfplumber python-dotenv tiktoken
+
+3. Run:
+   python seerah.py
+"""
+
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+import pdfplumber
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import PDFPlumberLoader
 
-# ------------------------
-# 1. Load API Key
-# ------------------------
+# ------------------------------
+# Load API key
+# ------------------------------
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("GOOGLE_API_KEY not found in .env file")
+    raise ValueError("OPENAI_API_KEY not found in .env file")
 
-# ------------------------
-# 2. Load Documents (PDFs)
-# ------------------------
-pdf_path = "data/raheeq.pdf"   # replace with your own file
-loader = PDFPlumberLoader(pdf_path)
-documents = loader.load()
 
-# ------------------------
-# 3. Split Documents into Chunks
-# ------------------------
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=200
-)
-docs = text_splitter.split_documents(documents)
+# ------------------------------
+# 1. Load PDF text
+# ------------------------------
+def load_pdf_text(pdf_path: str) -> str:
+    text = ""
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            if page.extract_text():
+                text += page.extract_text() + "\n"
+    return text
 
-# ------------------------
-# 4. Create Vector DB (FAISS)
-# ------------------------
-embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-vectorstore = FAISS.from_documents(docs, embeddings)
 
-# ------------------------
-# 5. Build Retrieval-QA Chain
-# ------------------------
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",   # fast + cost-efficient model
-    google_api_key=api_key,
-    temperature=0
-)
+# ------------------------------
+# 2. Split into chunks
+# ------------------------------
+def split_text(text: str):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200
+    )
+    return splitter.split_text(text)
 
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=vectorstore.as_retriever(),
-    chain_type="stuff"   # simplest method
-)
 
-# ------------------------
-# 6. Ask Questions
-# ------------------------
-while True:
-    query = input("\nAsk a question (or 'exit'): ")
-    if query.lower() == "exit":
-        break
-    result = qa_chain.run(query)
-    print(f"\nAnswer: {result}")
+# ------------------------------
+# 3. Build vectorstore
+# ------------------------------
+def build_vectorstore(chunks):
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        api_key=api_key
+    )
+    return FAISS.from_texts(chunks, embeddings)
+
+
+# ------------------------------
+# 4. Create QA chain
+# ------------------------------
+def make_qa_chain(vectorstore):
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+        api_key=api_key
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    return RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+
+
+# ------------------------------
+# Main
+# ------------------------------
+if __name__ == "__main__":
+    pdf_file = "data/raheeq.pdf"  # change to your PDF path
+    text = load_pdf_text(pdf_file)
+    chunks = split_text(text)
+    vectorstore = build_vectorstore(chunks)
+    qa = make_qa_chain(vectorstore)
+
+    print("\nSeerah Assistant ready! Type 'exit' to quit.\n")
+    while True:
+        query = input("You: ")
+        if query.lower() in ["exit", "quit"]:
+            break
+        answer = qa.run(query)
+        print("Assistant:", answer)

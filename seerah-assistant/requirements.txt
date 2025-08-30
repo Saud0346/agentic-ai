@@ -1,7 +1,8 @@
-python-dotenv
+pdfplumber
 langchain
 langchain-community
-langchain-google-genai
-faiss-cpu
-pypdf
-pdfplumber
+langchain-openai
+chromadb
+openai
+tiktoken
+python-dotenv
